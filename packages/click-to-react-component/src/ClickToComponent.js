@@ -208,6 +208,104 @@ export function ClickToComponent({ editor = 'vscode', pathModifier }) {
   )
 
   React.useEffect(
+    function syncHighlightOverlay() {
+      if (!(target instanceof HTMLElement) || state === State.IDLE) {
+        const style = window.document.body.style
+        style.removeProperty('--click-to-component-highlight-left')
+        style.removeProperty('--click-to-component-highlight-top')
+        style.removeProperty('--click-to-component-highlight-width')
+        style.removeProperty('--click-to-component-highlight-height')
+        style.removeProperty('--click-to-component-highlight-radius')
+        style.removeProperty('--click-to-component-outline-width')
+        return undefined
+      }
+
+      let animationFrameId = 0
+      let resizeObserver
+
+      const outlineWidthFromCSS = Number.parseFloat(
+        window
+          .getComputedStyle(window.document.body)
+          .getPropertyValue('--click-to-component-outline-width') || '0'
+      )
+
+      const outlineWidth = Number.isFinite(outlineWidthFromCSS)
+        ? outlineWidthFromCSS
+        : 4
+
+      const updateHighlight = () => {
+        if (!(target instanceof HTMLElement)) {
+          return
+        }
+
+        const rect = target.getBoundingClientRect()
+        const computed = window.getComputedStyle(target)
+
+        const style = window.document.body.style
+        style.setProperty(
+          '--click-to-component-highlight-left',
+          `${rect.left - outlineWidth}px`
+        )
+        style.setProperty(
+          '--click-to-component-highlight-top',
+          `${rect.top - outlineWidth}px`
+        )
+        style.setProperty(
+          '--click-to-component-highlight-width',
+          `${rect.width + outlineWidth * 2}px`
+        )
+        style.setProperty(
+          '--click-to-component-highlight-height',
+          `${rect.height + outlineWidth * 2}px`
+        )
+        style.setProperty(
+          '--click-to-component-highlight-radius',
+          computed.borderRadius || '0px'
+        )
+        style.setProperty(
+          '--click-to-component-outline-width',
+          `${outlineWidth}px`
+        )
+      }
+
+      const tick = () => {
+        updateHighlight()
+        animationFrameId = window.requestAnimationFrame(tick)
+      }
+
+      tick()
+
+      window.addEventListener('scroll', updateHighlight, true)
+      window.addEventListener('resize', updateHighlight)
+
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => updateHighlight())
+        resizeObserver.observe(target)
+      }
+
+      return () => {
+        window.cancelAnimationFrame(animationFrameId)
+
+        window.removeEventListener('scroll', updateHighlight, true)
+        window.removeEventListener('resize', updateHighlight)
+
+        if (resizeObserver) {
+          resizeObserver.disconnect()
+        }
+
+        const style = window.document.body.style
+        style.removeProperty('--click-to-component-highlight-left')
+        style.removeProperty('--click-to-component-highlight-top')
+        style.removeProperty('--click-to-component-highlight-width')
+        style.removeProperty('--click-to-component-highlight-height')
+        style.removeProperty('--click-to-component-highlight-radius')
+        style.removeProperty('--click-to-component-outline-width')
+      }
+    },
+    [state, target]
+  )
+
+  React.useEffect(
     function addEventListenersToWindow() {
       window.addEventListener('click', onClick, { capture: true })
       window.addEventListener('contextmenu', onContextMenu, { capture: true })
@@ -238,11 +336,46 @@ export function ClickToComponent({ editor = 'vscode', pathModifier }) {
 
       [data-click-to-component-target] {
         cursor: var(--click-to-component-cursor, context-menu) !important;
-        outline: auto 1px;
         outline: var(
           --click-to-component-outline,
-          -webkit-focus-ring-color auto 1px
+          2px solid rgba(99, 102, 241, 0.5)
         ) !important;
+        outline-offset: 2px !important;
+      }
+
+      body[data-click-to-component='HOVER']::after,
+      body[data-click-to-component='SELECT']::after {
+        content: '';
+        pointer-events: none;
+        position: fixed;
+        left: var(
+          --click-to-component-highlight-left,
+          -9999px
+        );
+        top: var(--click-to-component-highlight-top, -9999px);
+        width: var(--click-to-component-highlight-width, 0px);
+        height: var(--click-to-component-highlight-height, 0px);
+        border-radius: var(--click-to-component-highlight-radius, 0px);
+        z-index: 2147483647;
+        box-sizing: border-box;
+        border: var(
+            --click-to-component-outline-width,
+            4px
+          )
+          solid transparent;
+        border-image: var(
+            --click-to-component-outline-gradient,
+            linear-gradient(135deg, #38bdf8, #a855f7, #f97316)
+          )
+          1;
+        box-shadow: var(
+          --click-to-component-outline-shadow,
+          0 12px 30px rgba(59, 130, 246, 0.35)
+        );
+        transition: var(
+          --click-to-component-outline-transition,
+          transform 120ms ease, width 120ms ease, height 120ms ease
+        );
       }
     </style>
 
